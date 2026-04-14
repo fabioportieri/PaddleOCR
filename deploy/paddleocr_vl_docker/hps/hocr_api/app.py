@@ -5,9 +5,11 @@ import logging
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
+from uuid import uuid4
 
 import fastapi
 import httpx
@@ -20,6 +22,7 @@ LAYOUT_PARSING_URL = os.getenv(
 )
 REQUEST_TIMEOUT = int(os.getenv("HPS_LAYOUT_PARSING_TIMEOUT", "600"))
 LOG_LEVEL = os.getenv("HPS_LOG_LEVEL", "INFO")
+JSON_DUMP_DIR = os.getenv("HPS_JSON_DUMP_DIR", "/data/hocr-debug")
 
 logger = logging.getLogger("hocr-wrapper")
 
@@ -94,6 +97,19 @@ async def hocr(request: Request, body: Dict[str, Any]) -> HTMLResponse:
         return JSONResponse(status_code=err_code, content=layout_json)
 
     conversion_source = _extract_conversion_source(layout_json)
+    _dump_request_json(
+        request_log_id=request_log_id,
+        request_body=body,
+        layout_json=layout_json,
+        conversion_source=conversion_source,
+        status_code=status_code,
+    )
+
+    logger.info(
+        "Selected conversion source summary: %s",
+        _summarize_payload(conversion_source),
+    )
+
     image_width, image_height = _extract_image_size(body, conversion_source)
 
     converter = PaddleHOCRConverter2()
@@ -115,6 +131,9 @@ async def hocr(request: Request, body: Dict[str, Any]) -> HTMLResponse:
             image_height=image_height2,
             lang="eng",
         )
+
+    carea_count = hocr_html.count('class="ocr_carea"')
+    logger.info("hOCR carea count=%s", carea_count)
 
     headers = {"Content-Disposition": 'inline; filename="result.hocr.html"'}
     return HTMLResponse(content=hocr_html, status_code=200, headers=headers)
@@ -145,23 +164,194 @@ async def _call_layout_parsing(body: Dict[str, Any]) -> Tuple[Dict[str, Any], in
 
 
 def _extract_conversion_source(layout_json: Any) -> Any:
-    if not isinstance(layout_json, dict):
-        return layout_json
+    unwrapped = _unwrap_wrappers(layout_json)
+    candidate = _find_convertible_node(unwrapped)
+    if candidate is not None:
+        return candidate
+    return unwrapped
 
-    # Common wrappers used by inference APIs.
-    for key in ("result", "results", "output", "outputs", "data"):
-        if key in layout_json:
-            candidate = layout_json[key]
-            if candidate is None:
+
+def _unwrap_wrappers(data: Any, max_depth: int = 8) -> Any:
+    current = data
+    wrapper_keys = ("result", "results", "output", "outputs", "data", "response")
+
+    for _ in range(max_depth):
+        parsed = _try_parse_json_string(current)
+        if parsed is not None:
+            current = parsed
+            continue
+
+        if isinstance(current, dict):
+            moved = False
+            for key in wrapper_keys:
+                candidate = current.get(key)
+                if candidate is not None:
+                    current = candidate
+                    moved = True
+                    break
+            if moved:
                 continue
-            # If payload has single wrapper object, unwrap one level.
-            if isinstance(candidate, dict):
-                for inner_key in ("result", "results", "output", "outputs", "data"):
-                    if inner_key in candidate and candidate[inner_key] is not None:
-                        return candidate[inner_key]
-            return candidate
 
-    return layout_json
+            if len(current) == 1:
+                only_val = next(iter(current.values()))
+                if only_val is not None:
+                    current = only_val
+                    continue
+
+        if isinstance(current, list) and len(current) == 1:
+            current = current[0]
+            continue
+
+        break
+
+    return current
+
+
+def _find_convertible_node(data: Any) -> Any:
+    queue = [data]
+    max_nodes = 5000
+    visited = 0
+
+    while queue and visited < max_nodes:
+        node = queue.pop(0)
+        visited += 1
+
+        parsed = _try_parse_json_string(node)
+        if parsed is not None:
+            queue.append(parsed)
+            continue
+
+        if _looks_convertible(node):
+            return node
+
+        if isinstance(node, dict):
+            preferred_keys = [
+                "result",
+                "results",
+                "output",
+                "outputs",
+                "data",
+                "response",
+                "children",
+                "blocks",
+                "parsing_res_list",
+                "spotting_res",
+            ]
+            for key in preferred_keys:
+                if key in node:
+                    queue.append(node[key])
+            for key, value in node.items():
+                if key not in preferred_keys:
+                    queue.append(value)
+        elif isinstance(node, list):
+            queue.extend(node)
+
+    return None
+
+
+def _looks_convertible(node: Any) -> bool:
+    if isinstance(node, dict):
+        children = node.get("children")
+        if isinstance(children, list) and len(children) > 0:
+            return True
+
+        blocks = node.get("blocks")
+        if isinstance(blocks, list) and len(blocks) > 0:
+            return True
+
+        rec_texts = node.get("rec_texts")
+        rec_polys = node.get("rec_polys")
+        if isinstance(rec_texts, list) and isinstance(rec_polys, list):
+            return True
+
+        parsing_res_list = node.get("parsing_res_list")
+        if isinstance(parsing_res_list, list) and len(parsing_res_list) > 0:
+            return True
+
+        spotting = node.get("spotting_res")
+        if isinstance(spotting, dict):
+            s_texts = spotting.get("rec_texts")
+            s_polys = spotting.get("rec_polys")
+            if isinstance(s_texts, list) and isinstance(s_polys, list):
+                return True
+
+    if isinstance(node, list) and node:
+        first = node[0]
+        if isinstance(first, dict):
+            return _looks_convertible(first)
+
+    return False
+
+
+def _try_parse_json_string(value: Any) -> Any:
+    if not isinstance(value, str):
+        return None
+
+    text = value.strip()
+    if not text:
+        return None
+    if not ((text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]"))):
+        return None
+
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
+
+
+def _dump_request_json(
+    request_log_id: str,
+    request_body: Dict[str, Any],
+    layout_json: Any,
+    conversion_source: Any,
+    status_code: int,
+) -> None:
+    dump_dir = (JSON_DUMP_DIR or "").strip()
+    if not dump_dir:
+        return
+
+    try:
+        out_dir = Path(dump_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        safe_log_id = re.sub(r"[^A-Za-z0-9._-]", "_", str(request_log_id or "no-logid"))
+        filename = f"{stamp}_{safe_log_id}_{uuid4().hex[:8]}.json"
+        output_path = out_dir / filename
+
+        payload = {
+            "timestamp": stamp,
+            "requestLogId": request_log_id,
+            "statusCode": status_code,
+            "requestBody": request_body,
+            "layoutJson": layout_json,
+            "conversionSource": conversion_source,
+            "conversionSourceSummary": _summarize_payload(conversion_source),
+        }
+
+        output_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        logger.info("Saved request JSON to %s", output_path)
+    except Exception as exc:
+        logger.warning("Failed to dump request JSON: %s", exc)
+
+
+def _summarize_payload(payload: Any) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {"type": type(payload).__name__}
+    if isinstance(payload, dict):
+        summary["keys"] = sorted(payload.keys())[:40]
+        summary["size"] = len(payload)
+    elif isinstance(payload, list):
+        summary["size"] = len(payload)
+        if payload:
+            summary["first_type"] = type(payload[0]).__name__
+            if isinstance(payload[0], dict):
+                summary["first_keys"] = sorted(payload[0].keys())[:20]
+    elif isinstance(payload, str):
+        summary["length"] = len(payload)
+    return summary
 
 
 def _extract_image_size(request_body: Dict[str, Any], conversion_source: Any) -> Tuple[int, int]:

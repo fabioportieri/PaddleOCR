@@ -44,8 +44,11 @@ services:
     environment:
       - HPS_LAYOUT_PARSING_URL=${HPS_LAYOUT_PARSING_URL:-http://paddleocr-vl-api:8080/layout-parsing}
       - HPS_LAYOUT_PARSING_TIMEOUT=${HPS_LAYOUT_PARSING_TIMEOUT:-600}
+      - HPS_JSON_DUMP_DIR=${HPS_JSON_DUMP_DIR:-/data/hocr-debug}
       - HPS_LOG_LEVEL=${HPS_LOG_LEVEL:-INFO}
       - UVICORN_WORKERS=${UVICORN_WORKERS:-1}
+    volumes:
+      - ./hocr_debug:/data/hocr-debug
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8081/health || exit 1"]
