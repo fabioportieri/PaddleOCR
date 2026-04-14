@@ -1,3 +1,8 @@
+networks:
+  paddleocr_net:
+    driver: bridge
+    name: paddleocr_net
+
 services:
   paddleocr-vl-api:
     build:
@@ -5,7 +10,7 @@ services:
       dockerfile: gateway.Dockerfile
     container_name: paddleocr-vl-api
     ports:
-      - 8080:8080
+      - 9090:8080
     depends_on:
       paddleocr-vl-tritonserver:
         condition: service_healthy
@@ -23,17 +28,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - paddleocr_net
 
   paddleocr-vl-tritonserver:
     build:
       context: .
       dockerfile: tritonserver.Dockerfile
-      args:
-        DEVICE_TYPE: cpu
     container_name: paddleocr-vl-tritonserver
     depends_on:
       paddleocr-vlm-server:
         condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${DEVICE_ID:-0}"]
+              capabilities: [gpu]      
     shm_size: 4gb
     restart: unless-stopped
     healthcheck:
@@ -42,11 +54,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+    networks:
+      - paddleocr_net
 
   paddleocr-vlm-server:
     image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleocr-genai-vllm-server:latest-nvidia-gpu
     container_name: paddleocr-vlm-server
-    command: paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --host 0.0.0.0 --port 8080 --backend vllm --backend_config /etc/paddleocr/vllm_config.yaml
+      # command: paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --host 0.0.0.0 --port 8080 --backend vllm --backend_config /etc/paddleocr/vllm_config.yaml
+    command: paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --host 0.0.0.0 --port 8080 --backend vllm 
     volumes:
       - ./vllm_config.yaml:/etc/paddleocr/vllm_config.yaml:ro
     deploy:
@@ -63,3 +78,5 @@ services:
       timeout: 5s
       retries: 3
       start_period: 300s
+    networks:
+      - paddleocr_net
