@@ -104,6 +104,18 @@ async def hocr(request: Request, body: Dict[str, Any]) -> HTMLResponse:
         lang="eng",
     )
 
+    if 'class="ocr_carea"' not in hocr_html:
+        logger.warning(
+            "First conversion produced no carea blocks, retrying with full layout JSON"
+        )
+        image_width2, image_height2 = _extract_image_size(body, layout_json)
+        hocr_html, _text = converter.convert(
+            result=layout_json,
+            image_width=image_width2,
+            image_height=image_height2,
+            lang="eng",
+        )
+
     headers = {"Content-Disposition": 'inline; filename="result.hocr.html"'}
     return HTMLResponse(content=hocr_html, status_code=200, headers=headers)
 

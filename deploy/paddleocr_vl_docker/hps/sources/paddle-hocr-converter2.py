@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from html import escape
+from html import escape, unescape
+import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
@@ -167,6 +168,9 @@ class PaddleHOCRBuilder:
         elif isinstance(page_result, dict) and page_result.get("blocks"):
             areas, all_text = self._build_from_block_json(page_result, lang)
             ocr_system = "PaddleOCR"
+        elif self._has_document_children(page_result):
+            areas, all_text = self._build_from_document_tree(page_result, lang)
+            ocr_system = "PaddleOCR"
         else:
             areas, all_text = [], []
             ocr_system = "PaddleOCR"
@@ -198,6 +202,12 @@ class PaddleHOCRBuilder:
         if not isinstance(page, dict):
             return False
         return isinstance(page.get("rec_texts"), list) and isinstance(page.get("rec_polys"), list)
+
+    def _has_document_children(self, page: Any) -> bool:
+        if not isinstance(page, dict):
+            return False
+        children = page.get("children")
+        return isinstance(children, list) and len(children) > 0
 
     def _build_from_vl_spotting(self, page: Dict[str, Any], lang: str) -> Tuple[List[Area], List[str]]:
         spotting = page.get("spotting_res", {})
@@ -492,6 +502,66 @@ class PaddleHOCRBuilder:
         areas.sort(key=lambda a: (a.bbox.y1, a.bbox.x1))
         return areas, all_text
 
+    def _build_from_document_tree(self, page: Dict[str, Any], lang: str) -> Tuple[List[Area], List[str]]:
+        areas: List[Area] = []
+        all_text: List[str] = []
+
+        for node in _iter_content_nodes(page):
+            bbox = _bbox_from_any(node)
+            if bbox.x2 <= bbox.x1 or bbox.y2 <= bbox.y1:
+                continue
+
+            lines_text = _extract_lines_from_node(node)
+            if not lines_text:
+                continue
+
+            block_h = max(bbox.y2 - bbox.y1, 1)
+            line_h = max(block_h // len(lines_text), 1)
+            lines: List[Line] = []
+
+            for idx, line_text in enumerate(lines_text):
+                y0 = bbox.y1 + idx * line_h
+                y1 = min(bbox.y1 + (idx + 1) * line_h, bbox.y2)
+                line_bbox = BBox(bbox.x1, y0, bbox.x2, y1)
+                words = _estimate_words_for_line(
+                    line_text=line_text,
+                    line_bbox=line_bbox,
+                    confidence=95,
+                    id_factory=lambda: self._next_id("word", "word_counter"),
+                )
+                if not words:
+                    continue
+
+                lines.append(
+                    Line(
+                        words=words,
+                        bbox=line_bbox,
+                        conf=95,
+                        lid=self._next_id("line", "line_counter"),
+                    )
+                )
+                all_text.append(line_text)
+
+            if not lines:
+                continue
+
+            par = Paragraph(
+                lines=lines,
+                bbox=bbox,
+                pid=self._next_id("par", "par_counter"),
+                lang=lang,
+            )
+            areas.append(
+                Area(
+                    paragraphs=[par],
+                    bbox=bbox,
+                    aid=self._next_id("carea", "area_counter"),
+                )
+            )
+
+        areas.sort(key=lambda a: (a.bbox.y1, a.bbox.x1))
+        return areas, all_text
+
 
 class HOCRRenderer:
     def render(self, page: Page, ocr_system: str) -> str:
@@ -561,7 +631,112 @@ def _bbox_from_any(obj: Dict[str, Any]) -> BBox:
         return BBox(int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
 
     poly = obj.get("polygon", [])
+    if not poly:
+        return BBox(0, 0, 0, 0)
     return BBox.from_polygon(poly)
+
+
+def _iter_content_nodes(root: Any) -> List[Dict[str, Any]]:
+    nodes: List[Dict[str, Any]] = []
+
+    def walk(obj: Any) -> None:
+        if not isinstance(obj, dict):
+            return
+
+        block_type = str(obj.get("block_type", "")).lower()
+        html_text = str(obj.get("html", "") or "")
+        text = str(obj.get("text", "") or "")
+        has_bbox = bool(obj.get("bbox") or obj.get("polygon"))
+
+        is_content = has_bbox and (
+            bool(text.strip())
+            or bool(_normalize_html_text_for_check(html_text))
+        )
+        is_page_like = block_type in {"page", "document"}
+
+        if is_content and not is_page_like:
+            nodes.append(obj)
+
+        children = obj.get("children")
+        if isinstance(children, list):
+            for child in children:
+                walk(child)
+
+    walk(root)
+    return nodes
+
+
+def _extract_lines_from_node(node: Dict[str, Any]) -> List[str]:
+    text = str(node.get("text", "") or "")
+    if text.strip():
+        return _split_lines(text)
+
+    html_text = str(node.get("html", "") or "")
+    if not html_text.strip():
+        return []
+
+    if re.search(r"<tr\b", html_text, flags=re.IGNORECASE):
+        return _extract_lines_from_table_html(html_text)
+
+    return _extract_lines_from_generic_html(html_text)
+
+
+def _extract_lines_from_table_html(html_text: str) -> List[str]:
+    lines: List[str] = []
+    row_pattern = re.compile(r"<tr[^>]*>(.*?)</tr>", flags=re.IGNORECASE | re.DOTALL)
+    cell_pattern = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", flags=re.IGNORECASE | re.DOTALL)
+
+    for row_html in row_pattern.findall(html_text):
+        cells = cell_pattern.findall(row_html)
+        if not cells:
+            line = _strip_html(row_html)
+            if line:
+                lines.append(line)
+            continue
+        parts = [_strip_html(cell) for cell in cells]
+        parts = [p for p in parts if p]
+        if parts:
+            lines.append(" | ".join(parts))
+
+    return _dedupe_empty(lines)
+
+
+def _extract_lines_from_generic_html(html_text: str) -> List[str]:
+    transformed = re.sub(r"<br\s*/?>", "\n", html_text, flags=re.IGNORECASE)
+    transformed = re.sub(
+        r"</(p|div|li|h1|h2|h3|h4|h5|h6|section|article|header|footer|caption)>",
+        "\n",
+        transformed,
+        flags=re.IGNORECASE,
+    )
+    plain = _strip_html(transformed)
+    return _split_lines(plain)
+
+
+def _strip_html(value: str) -> str:
+    no_tags = re.sub(r"<[^>]+>", " ", value)
+    decoded = unescape(no_tags)
+    normalized = re.sub(r"\s+", " ", decoded).strip()
+    return normalized
+
+
+def _split_lines(value: str) -> List[str]:
+    out = []
+    for raw in value.splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if line:
+            out.append(line)
+    return _dedupe_empty(out)
+
+
+def _normalize_html_text_for_check(value: str) -> str:
+    reduced = re.sub(r"<content-ref[^>]*>", "", value, flags=re.IGNORECASE)
+    reduced = re.sub(r"</content-ref>", "", reduced, flags=re.IGNORECASE)
+    return _strip_html(reduced)
+
+
+def _dedupe_empty(lines: List[str]) -> List[str]:
+    return [line for line in lines if line and line.strip()]
 
 
 def _merge_bbox(boxes: Sequence[BBox]) -> BBox:
