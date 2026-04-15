@@ -125,14 +125,18 @@ def paddlex_to_hocr_layout(page: NormalizedPage, page_id=1, image_name: str | No
     page_words.sort(key=lambda w: (w["bbox"][1], w["bbox"][0]))
 
     # -------------------------------------------------
-    # Page bbox: derive from actual word coordinates
+    # Page bbox: use full image dimensions so the coordinate
+    # space matches the absolute coords in the HOCR tokens
     # -------------------------------------------------
-    page_bbox = [
-        min(w["bbox"][0] for w in page_words),
-        min(w["bbox"][1] for w in page_words),
-        max(w["bbox"][2] for w in page_words),
-        max(w["bbox"][3] for w in page_words),
-    ]
+    if page.width and page.height:
+        page_bbox = [0, 0, page.width, page.height]
+    else:
+        page_bbox = [
+            min(w["bbox"][0] for w in page_words),
+            min(w["bbox"][1] for w in page_words),
+            max(w["bbox"][2] for w in page_words),
+            max(w["bbox"][3] for w in page_words),
+        ]
 
     html_parts = []
     carea_id = 1

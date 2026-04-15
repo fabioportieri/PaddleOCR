@@ -39,16 +39,14 @@ async def predict(file: UploadFile = File(...)):
     # -----------------------------
     doc_result_gen = doc_pipeline.predict(
         input=img,
-        params={
-            "layout_threshold": 0.3,
-            "layout_nms": True,
-            "text_det_limit_side_len": 960,
-            "text_det_thresh": 0.3,
-            "text_det_box_thresh": 0.5,
-            "text_rec_score_thresh": 0.5,
-            "use_doc_orientation_classify": False,
-            "use_table_recognition": True
-        }
+        use_doc_preprocessor=True,
+        use_seal_recognition=False,
+        use_chart_recognition=False,
+        use_formula_recognition=False,
+        #  use_doc_orientation_classify=False,
+         use_region_detection=False,
+        use_table_recognition=True,
+        use_doc_unwarping=False 
     )
 
     # doc_output = [res.json for res in doc_result_gen]

@@ -35,21 +35,9 @@ class NormalizedPage:
     height: int = 0
 
 def to_box(b) -> Box:
-    """
-    Supports:1
-    - [x1,y1,x2,y2]
-    - [x,y,w,h]
-    """
-    if len(b) == 4:
-        x1, y1, a, b2 = b
+    # PaddleX 3.x standard is [x1, y1, x2, y2]
+    return Box(float(b[0]), float(b[1]), float(b[2]), float(b[3]))
 
-        # heuristic: if a/b2 look like width/height
-        if a > x1 or b2 > y1:
-            return Box(x1, y1, a, b2)
-        else:
-            return Box(x1, y1, x1 + a, y1 + b2)
-
-    raise ValueError(f"Unsupported box format: {b}")
 
 
 def paddlex_to_normalized(doc_result: Any) -> NormalizedPage:
@@ -132,12 +120,13 @@ def extract_ocr(doc: Dict[str, Any]) -> List[OCRToken]:
     for table in (doc.get("table_res_list") or []):
         cell_boxes = table.get("cell_box_list") or []
         if cell_boxes:
-            # derive table bbox from union of cell boxes
+            # derive table bbox from union of cell boxes (these are absolute page coords)
             xs1 = [b[0] for b in cell_boxes]
             ys1 = [b[1] for b in cell_boxes]
             xs2 = [b[2] for b in cell_boxes]
             ys2 = [b[3] for b in cell_boxes]
-            table_boxes.append(Box(min(xs1), min(ys1), max(xs2), max(ys2)))
+            table_box = Box(min(xs1), min(ys1), max(xs2), max(ys2))
+            table_boxes.append(table_box)
         table_tokens.extend(_tokens_from_ocr_pred(table.get("table_ocr_pred") or {}))
 
     # Overall OCR: keep only tokens whose center is NOT inside any table area
@@ -147,4 +136,27 @@ def extract_ocr(doc: Dict[str, Any]) -> List[OCRToken]:
         if not any(_inside(cx, cy, tb) for tb in table_boxes):
             overall_tokens.append(t)
 
-    return overall_tokens + table_tokens
+    # parsing_res_list: non-table blocks (figure_title, header, text, number, footer, etc.)
+    # These are section headings and labels not covered by overall_ocr or table_ocr.
+    # Add them only when no overall_ocr token already falls inside the block bbox.
+    parsing_tokens: List[OCRToken] = []
+    for block in (doc.get("parsing_res_list") or []):
+        label = block.get("block_label", "")
+        if label == "table":
+            continue
+        content = (block.get("block_content") or "").strip()
+        if not content:
+            continue
+        bbox = block.get("block_bbox") or []
+        if len(bbox) != 4:
+            continue
+        bx = Box(bbox[0], bbox[1], bbox[2], bbox[3])
+        # Skip if any overall_ocr token is already inside this block
+        already_covered = any(
+            _inside(_center(t.box)[0], _center(t.box)[1], bx)
+            for t in overall_tokens
+        )
+        if not already_covered:
+            parsing_tokens.append(OCRToken(text=content, box=bx, score=1.0, raw=block))
+
+    return overall_tokens + parsing_tokens + table_tokens
