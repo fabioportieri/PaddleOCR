@@ -1,0 +1,96 @@
+[
+  {
+    "res": {
+      "input_path": null,
+      "page_index": null,
+      "page_count": null,
+      "width": 0,
+      "height": 0,
+      "model_settings": {
+        "use_doc_preprocessor": true,
+        "use_seal_recognition": false,
+        "use_table_recognition": true,
+        "use_formula_recognition": true,
+        "use_chart_recognition": false,
+        "use_region_detection": true,
+        "format_block_content": false,
+        "markdown_ignore_labels": [""]
+      },
+      "parsing_res_list": [
+        {
+          "block_label": "",
+          "block_content": "",
+          "block_bbox": [0, 0, 0, 0],
+          "block_id": 0,
+          "block_order": null
+        }
+      ],
+      "doc_preprocessor_res": {
+        "input_path": null,
+        "page_index": null,
+        "model_settings": {
+          "use_doc_orientation_classify": true,
+          "use_doc_unwarping": true
+        },
+        "angle": 0
+      },
+      "layout_det_res": {
+        "input_path": null,
+        "page_index": null,
+        "boxes": [
+          {
+            "cls_id": 0,
+            "label": "",
+            "score": 0.0,
+            "coordinate": [0, 0, 0, 0]
+          }
+        ]
+      },
+      "overall_ocr_res": {
+        "input_path": null,
+        "page_index": null,
+        "model_settings": {
+          "use_doc_preprocessor": false,
+          "use_textline_orientation": true
+        },
+        "dt_polys": [
+          [
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]
+          ]
+        ],
+        "rec_boxes": [[0, 0, 0, 0]],
+        "rec_texts": [""],
+        "rec_scores": [0.0],
+        "rec_polys": [
+          [
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]
+          ]
+        ]
+      },
+      "table_res_list": [
+        {
+          "cell_box_list": [[0, 0, 0, 0]],
+          "pred_html": "",
+          "table_ocr_pred": {
+            "rec_polys": [
+              [
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [0, 0]
+              ]
+            ],
+            "rec_texts": [""],
+            "rec_scores": [0.0]
+          }
+        }
+      ]
+    }
+  }
+]

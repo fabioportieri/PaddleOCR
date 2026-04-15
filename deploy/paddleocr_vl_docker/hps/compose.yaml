@@ -28,9 +28,22 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+    volumes:
+      - paddlex-models:/root/.paddlex/official_models
+      - ./hocr_debug:/data/debug
     networks:
       - paddleocr_net
 
+  paddlex-model-downloader:
+    image: python:3.10
+    command: >
+      bash -c "
+        pip install huggingface_hub &&
+        python /scripts/download_models.py
+      "
+    volumes:
+      - paddlex-models:/root/.paddlex/official_models
+      - ./scripts:/scripts:ro
   # paddleocr-vl-api:
   #   build:
   #     context: .
@@ -85,54 +98,57 @@ services:
   #   networks:
   #     - paddleocr_net
 
-  paddleocr-vl-tritonserver:
-    build:
-      context: .
-      dockerfile: tritonserver.Dockerfile
-    container_name: paddleocr-vl-tritonserver
-    depends_on:
-      paddleocr-vlm-server:
-        condition: service_healthy
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${DEVICE_ID:-0}"]
-              capabilities: [gpu]
-    shm_size: 4gb
-    restart: unless-stopped
-    healthcheck:
-      test:
-        ["CMD-SHELL", "curl -f http://localhost:8000/v2/health/ready || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    networks:
-      - paddleocr_net
+  # paddleocr-vl-tritonserver:
+  #   build:
+  #     context: .
+  #     dockerfile: tritonserver.Dockerfile
+  #   container_name: paddleocr-vl-tritonserver
+  #   depends_on:
+  #     paddleocr-vlm-server:
+  #       condition: service_healthy
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             device_ids: ["${DEVICE_ID:-0}"]
+  #             capabilities: [gpu]
+  #   shm_size: 4gb
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test:
+  #       ["CMD-SHELL", "curl -f http://localhost:8000/v2/health/ready || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 60s
+  #   networks:
+  #     - paddleocr_net
 
-  paddleocr-vlm-server:
-    image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleocr-genai-vllm-server:latest-nvidia-gpu
-    container_name:
-      paddleocr-vlm-server
-      # command: paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --host 0.0.0.0 --port 8080 --backend vllm --backend_config /etc/paddleocr/vllm_config.yaml
-    command: paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --host 0.0.0.0 --port 8080 --backend vllm
-    volumes:
-      - ./vllm_config.yaml:/etc/paddleocr/vllm_config.yaml:ro
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${DEVICE_ID:-0}"]
-              capabilities: [gpu]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 300s
-    networks:
-      - paddleocr_net
+  # paddleocr-vlm-server:
+  #   image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleocr-genai-vllm-server:latest-nvidia-gpu
+  #   container_name:
+  #     paddleocr-vlm-server
+  #     # command: paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --host 0.0.0.0 --port 8080 --backend vllm --backend_config /etc/paddleocr/vllm_config.yaml
+  #   command: paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --host 0.0.0.0 --port 8080 --backend vllm
+  #   volumes:
+  #     - ./vllm_config.yaml:/etc/paddleocr/vllm_config.yaml:ro
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             device_ids: ["${DEVICE_ID:-0}"]
+  #             capabilities: [gpu]
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 300s
+  #   networks:
+  #     - paddleocr_net
+
+volumes:
+  paddlex-models:
