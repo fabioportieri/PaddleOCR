@@ -85,9 +85,10 @@ class Line:
     def to_html(self) -> str:
         conf = self.conf if self.conf is not None else 95
         words_html = " ".join(word.to_html() for word in self.words)
+        # Remove baseline from title
         return (
             f'<span class="ocr_line" id="{self.lid}" '
-            f'title="{self.bbox.as_hocr()}; baseline 0 0; x_wconf {conf}">{words_html}</span>'
+            f'title="{self.bbox.as_hocr()}; x_wconf {conf}">{words_html}</span>'
         )
 
 
@@ -276,7 +277,12 @@ class PaddleHOCRBuilder:
             content = _obj_get(block, "content") or _obj_get(block, "block_content") or ""
             bbox_data = _obj_get(block, "bbox") or _obj_get(block, "block_bbox")
 
-            if not str(content).strip() or label not in TEXT_LABELS:
+            label_norm = str(label).strip().lower()
+            content_str = str(content)
+
+            if not content_str.strip():
+                continue
+            if label_norm not in TEXT_LABELS and label_norm != "table":
                 continue
             if not bbox_data or len(bbox_data) < 4:
                 continue
@@ -284,7 +290,11 @@ class PaddleHOCRBuilder:
             bx0, by0, bx1, by1 = [int(v) for v in bbox_data[:4]]
             block_bbox = BBox(bx0, by0, bx1, by1)
 
-            text_lines = [line.strip() for line in str(content).split("\n") if line.strip()]
+
+            if label_norm == "table":
+                text_lines = _extract_lines_from_table_html(content_str)
+            else:
+                text_lines = [line.strip() for line in content_str.split("\n") if line.strip()]
             if not text_lines:
                 continue
 
@@ -295,7 +305,17 @@ class PaddleHOCRBuilder:
             for idx, line_text in enumerate(text_lines):
                 ly0 = by0 + idx * line_h
                 ly1 = min(by0 + (idx + 1) * line_h, by1)
-                line_bbox = BBox(bx0, ly0, bx1, ly1)
+                # Estimate bbox width from text length (shrink horizontally)
+                text_len = len(line_text)
+                if text_len > 0:
+                    shrink_ratio = min(1.0, max(0.15, text_len / 80.0))  # 80 chars = full width
+                else:
+                    shrink_ratio = 0.15
+                cx = (bx0 + bx1) // 2
+                half_w = int((bx1 - bx0) * shrink_ratio // 2)
+                sx0 = max(bx0, cx - half_w)
+                sx1 = min(bx1, cx + half_w)
+                line_bbox = BBox(sx0, ly0, sx1, ly1)
 
                 words = _estimate_words_for_line(
                     line_text=line_text,

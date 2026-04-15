@@ -319,14 +319,18 @@ def _dump_request_json(
         filename = f"{stamp}_{safe_log_id}_{uuid4().hex[:8]}.json"
         output_path = out_dir / filename
 
+        safe_request_body = _sanitize_for_dump(request_body)
+        safe_layout_json = _sanitize_for_dump(layout_json)
+        safe_conversion_source = _sanitize_for_dump(conversion_source)
+
         payload = {
             "timestamp": stamp,
             "requestLogId": request_log_id,
             "statusCode": status_code,
-            "requestBody": request_body,
-            "layoutJson": layout_json,
-            "conversionSource": conversion_source,
-            "conversionSourceSummary": _summarize_payload(conversion_source),
+            "requestBody": safe_request_body,
+            "layoutJson": safe_layout_json,
+            "conversionSource": safe_conversion_source,
+            "conversionSourceSummary": _summarize_payload(safe_conversion_source),
         }
 
         output_path.write_text(
@@ -336,6 +340,50 @@ def _dump_request_json(
         logger.info("Saved request JSON to %s", output_path)
     except Exception as exc:
         logger.warning("Failed to dump request JSON: %s", exc)
+
+
+def _sanitize_for_dump(value: Any) -> Any:
+    if isinstance(value, dict):
+        out: Dict[str, Any] = {}
+        for key, inner in value.items():
+            out[str(key)] = _sanitize_for_dump(inner)
+        return out
+
+    if isinstance(value, list):
+        return [_sanitize_for_dump(item) for item in value]
+
+    if isinstance(value, str):
+        if _looks_like_base64_payload(value):
+            return f"[omitted-base64 length={len(value)}]"
+        return value
+
+    return value
+
+
+def _looks_like_base64_payload(text: str) -> bool:
+    t = text.strip()
+    if len(t) < 1024:
+        return False
+
+    if t.startswith("data:image/") and ";base64," in t:
+        return True
+
+    if re.search(r"https?://", t):
+        return False
+
+    compact = re.sub(r"\s+", "", t)
+    if len(compact) < 1024:
+        return False
+
+    if not re.fullmatch(r"[A-Za-z0-9+/=]+", compact):
+        return False
+
+    # JPEG/PNG-like base64 starts are common in OCR inputs.
+    if compact.startswith("/9j/") or compact.startswith("iVBOR"):
+        return True
+
+    # Heuristic for generic base64 blocks.
+    return len(compact) % 4 == 0
 
 
 def _summarize_payload(payload: Any) -> Dict[str, Any]:

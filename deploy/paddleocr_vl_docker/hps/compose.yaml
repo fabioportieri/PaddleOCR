@@ -4,59 +4,86 @@ networks:
     name: paddleocr_net
 
 services:
-  paddleocr-vl-api:
+  paddleocr-structure-api:
     build:
       context: .
-      dockerfile: gateway.Dockerfile
-    container_name: paddleocr-vl-api
+      dockerfile: ppstructurev3.Dockerfile
+    container_name: paddleocr-structure-api
     ports:
-      - 9090:8080
-    depends_on:
-      paddleocr-vl-tritonserver:
-        condition: service_healthy
+      - 9092:8082
     environment:
-      - HPS_TRITON_URL=paddleocr-vl-tritonserver:8001
-      - HPS_VLM_URL=${HPS_VLM_URL:-http://paddleocr-vlm-server:8080}
-      - HPS_MAX_CONCURRENT_INFERENCE_REQUESTS=${HPS_MAX_CONCURRENT_INFERENCE_REQUESTS:-16}
-      - HPS_MAX_CONCURRENT_NON_INFERENCE_REQUESTS=${HPS_MAX_CONCURRENT_NON_INFERENCE_REQUESTS:-64}
-      - HPS_INFERENCE_TIMEOUT=${HPS_INFERENCE_TIMEOUT:-600}
-      - HPS_LOG_LEVEL=${HPS_LOG_LEVEL:-INFO}
-      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+      - LOG_LEVEL=INFO
+      - DEVICE=gpu # or cpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${DEVICE_ID:-0}"]
+              capabilities: [gpu]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8082/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 60s
     networks:
       - paddleocr_net
 
-  paddleocr-hocr-api:
-    build:
-      context: .
-      dockerfile: hocr.Dockerfile
-    container_name: paddleocr-hocr-api
-    ports:
-      - 9091:8081
-    depends_on:
-      paddleocr-vl-api:
-        condition: service_healthy
-    environment:
-      - HPS_LAYOUT_PARSING_URL=${HPS_LAYOUT_PARSING_URL:-http://paddleocr-vl-api:8080/layout-parsing}
-      - HPS_LAYOUT_PARSING_TIMEOUT=${HPS_LAYOUT_PARSING_TIMEOUT:-600}
-      - HPS_JSON_DUMP_DIR=${HPS_JSON_DUMP_DIR:-/data/hocr-debug}
-      - HPS_LOG_LEVEL=${HPS_LOG_LEVEL:-INFO}
-      - UVICORN_WORKERS=${UVICORN_WORKERS:-1}
-    volumes:
-      - ./hocr_debug:/data/hocr-debug
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8081/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    networks:
-      - paddleocr_net
+  # paddleocr-vl-api:
+  #   build:
+  #     context: .
+  #     dockerfile: gateway.Dockerfile
+  #   container_name: paddleocr-vl-api
+  #   ports:
+  #     - 9090:8080
+  #   depends_on:
+  #     paddleocr-vl-tritonserver:
+  #       condition: service_healthy
+  #   environment:
+  #     - HPS_TRITON_URL=paddleocr-vl-tritonserver:8001
+  #     - HPS_VLM_URL=${HPS_VLM_URL:-http://paddleocr-vlm-server:8080}
+  #     - HPS_MAX_CONCURRENT_INFERENCE_REQUESTS=${HPS_MAX_CONCURRENT_INFERENCE_REQUESTS:-16}
+  #     - HPS_MAX_CONCURRENT_NON_INFERENCE_REQUESTS=${HPS_MAX_CONCURRENT_NON_INFERENCE_REQUESTS:-64}
+  #     - HPS_INFERENCE_TIMEOUT=${HPS_INFERENCE_TIMEOUT:-600}
+  #     - HPS_LOG_LEVEL=${HPS_LOG_LEVEL:-INFO}
+  #     - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #   networks:
+  #     - paddleocr_net
+
+  # paddleocr-hocr-api:
+  #   build:
+  #     context: .
+  #     dockerfile: hocr.Dockerfile
+  #   container_name: paddleocr-hocr-api
+  #   ports:
+  #     - 9091:8081
+  #   depends_on:
+  #     paddleocr-vl-api:
+  #       condition: service_healthy
+  #   environment:
+  #     - HPS_LAYOUT_PARSING_URL=${HPS_LAYOUT_PARSING_URL:-http://paddleocr-vl-api:8080/layout-parsing}
+  #     - HPS_LAYOUT_PARSING_TIMEOUT=${HPS_LAYOUT_PARSING_TIMEOUT:-600}
+  #     - HPS_JSON_DUMP_DIR=${HPS_JSON_DUMP_DIR:-/data/hocr-debug}
+  #     - HPS_LOG_LEVEL=${HPS_LOG_LEVEL:-INFO}
+  #     - UVICORN_WORKERS=${UVICORN_WORKERS:-1}
+  #   volumes:
+  #     - ./hocr_debug:/data/hocr-debug
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:8081/health || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #   networks:
+  #     - paddleocr_net
 
   paddleocr-vl-tritonserver:
     build:

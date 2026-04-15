@@ -1,0 +1,16 @@
+services:
+  paddleocr-hubserving-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: paddleocr-hubserving-gpu:local
+    container_name: paddleocr-hubserving-gpu
+    ports:
+      - "8868:8868"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]

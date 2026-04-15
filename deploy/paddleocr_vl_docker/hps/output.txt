@@ -1,0 +1,57 @@
+1 | Nei | Total
+e | prec.
+9 | 9
+16 | 16
+38 | 38
+128 | 138
+186 | 186
+tartaria del suolo
+tato
+ZIONATE | Num.
+1x
+MALATTIE | Animal infetti | Animali sospetti sequestrati o in osserv. | Stalle - Scuderie - Porcili posti sotto sequestro
+Bovini | Equini | Sulini | Ovini | Canii | Volatili da coritile | Città | Suburbio | TOTALE | Bovini | Equini | Sulini | Ovini | Canti | Volatili da coritile | Suburbio | TOTALE | Città | Suburbio | TOTALE | Suburbio | TOTALE
+Morva | Tobacco | Tuberculosis | 19
+Alfa epizootica | Carbouchio ematico | 19 | 19 | 19 | 6
+Mal ossino | Pneumonenteire dei suimi | 19
+Rabbia | Differite aviaria | 19
+Enterite acuta | Nel mese | 19 | 19 | 19 | 6 | 3
+Nei mesi precedenti | 16 | 1 | 1 | 18 | 18 | 3
+TOTALE | 35 | 1 | 1 | 37 | 37 | 9 | 3
+24. Ispezioni sanitarie ad animali da macello e carni
+ANIMALI
+SPECIE | Macello Comunale | Prazioni
+e | QUALITÀ
+Genere | I' | II' | III' | di bassa macelleria | di bassa macelleria | di bassa macelleria | N. | Peso vfvo | Peso morto | SPEC1E | macelli, fresche | 10 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1
+Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg.
+Buoi | 69 | 5 | 11 | 6 | 74 | 49725 | 35557 | BOVINA | 3478 | 1703 | 5176 | Istituto di Beneficenza
+Vacche | 28 | 98 | 55 | 3531 | 27875 | BOVINA | 1617 | 1617
+Tori | 5 | 25 | 54 | 16342 | 2815 | BOVINA | 114 | 114
+Manzetti e Civetti | 4 | 4 | 41 | 4744 | 2372 | EQUINA | Distruzione
+Vitelli | 270 | 4 | 277 | 22216 | 13330 | MISTE
+Castrati | 1 | 1
+Pecore | 1 | 1
+Montoni | 15 | 15 | 201 | 120
+Agnelli | 15
+Capre | 15
+Capretti | 456 | 5 | 451 | 118504 | BOVINA | 44739 | 39692 | 4569 | 89000 | 11 | 162
+Equini
+Nel mese | 841 | 141 | 11 | 6 | 3 | 27 | 1002 | 266563 | 110016 | EQUINA | CARNI o VISCERI sequestrati e distrutti
+Nei mesi pr. | 7209 | 1875 | 90 | 38 | 257 | 27 | 9496 | 265391 | 1147079 | NEI mese | 1576 | Macello con. del rim. | 100
+Totale | 8050 | 2016 | 101 | 44 | 260 | 27 | 10498 | 2320494 | 1317095 | TOTALE | 1576 | 5695 | 7271 | 12760 | 4221 | 1180 | 15801
+25. Consumo di carni in Comune (riepliogo a peso netto)
+CARNI | Bovine | Ovine | Suine | Equine | 1ste | Polhame e selvage. | Contigli | TOTALE | CAUSA | IN TOTALITÀ | Carni o visceral | TOTALE | PROV-NIENZA
+Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Kg. | Animali | N. | Kg. | G. | G. | G. | G. | G. | G. | G. | G. | G.
+macellate fresche. | 82926 | 1737 | 91157 | 34290 | 4551 | 214061 | Idroemia . | Vacca | 1 | 245 | 245 | Mac.Com. id.
+congelate refrigerate | 1703 | 1703 | Tubercolosi | 245 | id.
+sal. insacc. conf. (d'imp.) | 1 | 1 | Diverse | 690 | 690
+nel mese esportale | 84029 | 1737 | 91157 | 34420 | 4551 | 215903
+consumate in Corrune | 84029 | 1737 | 91157 | 34429 | 4551 | 215903 | Nel mese | 690 | 1180
+nei mesi prec. | 96725 | 18005 | 202902 | 270 | 201391 | 43620 | 1432613 | Nei mesi pr. | 11265 | 17108
+TOTALE | 1051054 | 19742 | 293459 | 270 | 235820 | 48171 | 1648516 | TOTALE | 11955 | 18288
+27. Animali visitati in partenza, in arrivo o di transito pel Comune
+Periodi di Tempo | ANIMALI
+Bovine | Equini | Sulini | Ovini e Capri | riliasciati | ritirati
+Nel mese | 16 | 2 | 229 | 225 | 3 | 281
+Nei mesi preced. | 2819
+TOTALE | 3835 | 43 | 290 | 228 | 284
